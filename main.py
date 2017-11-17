@@ -1,246 +1,208 @@
-from dataset import data_generator as data
-from model import deep_id
-import tensorflow as tf
+import os
+
 import numpy as np
-import cv2
+import tensorflow as tf
+
+import graph
+from dataset import sklearn_dataset as sk
+from dataset import facescrub_dataset as fs
+from model import deep_id
+import time
 
 
 def pipeline_deepid():
+    # subjectName = 'face-recog-{}'.format(time.time())
+    subjectName = 'face-recog-{}'.format('1510879123.02')
+    dirname = os.path.dirname(__file__)
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
+
+    lr = 0.01
+    batchSize = 128
+    trainEpoch = 30
+
+    trainLFW = False
+
+    if trainLFW:
+        key = 'lfwColor_0.5'
+        (trainX, trainY), (valX, valY), (testX, testY) = sk.separateToTrainValTest(key, 0.7, 0.1, 0.2)
+        trainDataGenerator = sk.getDataGenerator('augmentedDataGenerator',
+                                                 X=trainX,
+                                                 Y=trainY,
+                                                 batchSize=batchSize,
+                                                 shuffle=True,
+                                                 scaledSize=(55, 47),
+                                                 fit=True)
+        valDataGenerator = sk.getDataGenerator('defaultDataGenerator',
+                                               X=valX,
+                                               Y=valY,
+                                               batchSize=batchSize,
+                                               shuffle=True,
+                                               scaledSize=(55, 47),
+                                               trainKey='augmentedDataGenerator')
+        testDataGenerator = sk.getDataGenerator('defaultDataGenerator',
+                                                X=testX,
+                                                Y=testY,
+                                                batchSize=batchSize,
+                                                shuffle=True,
+                                                scaledSize=(55, 47),
+                                                trainKey='augmentedDataGenerator')
+        trainSteps = trainEpoch * (trainX.shape[0] / batchSize)
+        testSteps = int(testX.shape[0] / batchSize)
+        nClasses = sk.getClasses(key)
+    else:
+        datadirPrefix = '{}/dataset/facescrub_crop'.format(dirname)
+        meanstdDir = '{}/dataset/facescrub_meanstd'.format(dirname)
+        nClasses = len(os.listdir(datadirPrefix))
+        trainDataDir = datadirPrefix + '_train'
+        valDataDir = datadirPrefix + '_val'
+        testDataDir = datadirPrefix + '_test'
+
+        trainDataGenerator, nTrainImages = fs.getDataGenerator(trainDataDir, meanstdDir, batchSize, True)
+        valDataGenerator, nValImages = fs.getDataGenerator(valDataDir, meanstdDir, batchSize, True)
+        testDataGenerator, nTestImages = fs.getDataGenerator(testDataDir, meanstdDir, batchSize, True)
+
+        print 'train -', nTrainImages
+        print 'val -', nValImages
+        print 'test -', nTestImages
+        print 'classes -', nClasses
+
+        trainSteps = trainEpoch * int(nTrainImages / batchSize)
+        testSteps = nTestImages / batchSize
+
+    fig1, ax1 = graph.getFigAx()
+    fig2, ax2 = graph.getFigAx()
+
     with tf.Session(config=config) as sess:
-        layers, train_ops = deep_id.get_model(0.0005, data.TOTAL_PEOPLE)
+        globalStep = tf.Variable(0, trainable=False)
+        learningRate = tf.train.exponential_decay(lr, globalStep, 100000, 0.9)
+
+        valInterval = 1
+        saveInterval = 500
+        updateInterval = 100
+        saveDir = '{}/trained/{}'.format(dirname, subjectName)
+
+        layers, train_ops = deep_id.get_model(learningRate, nClasses, globalStep)
         sess.run(tf.global_variables_initializer())
-        saver = tf.train.Saver()
-        fetches = [layers['accuracy'],
-                   layers['loss']] + train_ops.values()
+        saver = tf.train.Saver(max_to_keep=None)
 
-        curr = 0
-        batch_size = 32
-        n_epoch = 20
-        for e in xrange(1, n_epoch + 1):
-            avg_acc = 0
-            avg_loss = 0
-            curr_fold = np.random.randint(len(data.ALL_TRAIN))
-            curr_train = data.ALL_TRAIN[curr_fold]
-            n_steps = int(len(curr_train) / batch_size)
-            for step in xrange(n_steps):
-                inputs, labels, curr = get_all_data(curr_train, curr, batch_size)
-                acc, loss = sess.run(fetches, feed_dict={
-                    layers['inputs']: inputs,
-                    layers['labels']: labels,
-                    layers['is_training']: True
-                })[:2]
+        layerFetches = [layers['loss'],
+                        layers['accuracy']]
+        fetches = layerFetches + train_ops.values()
 
-                avg_acc += acc
-                avg_loss += loss
+        # trainLosses = []
+        # trainAccuracy = []
+        # valLosses = []
+        # valAccuracy = []
+        trainLosses, trainAccuracy, valLosses, valAccuracy = load('{}/trained/{}'.format(dirname, subjectName),
+                                                                  subjectName,
+                                                                  42280,
+                                                                  saver,
+                                                                  sess,
+                                                                  globalStep)
 
-            avg_acc /= n_steps
-            avg_loss /= n_steps
-            print 'e: ', e
-            print 'accuracy: ', avg_acc
-            print 'loss: ', avg_loss
+        # print 'current learning rate', sess.run(learningRate)
 
-            if e % 5 == 0:
-                curr = 0
-                avg_acc = 0
-                avg_loss = 0
-                curr_test = data.ALL_TEST[curr_fold]
-                n_steps = int(len(curr_test) / batch_size)
-                for step in xrange(n_steps):
-                    inputs, labels, curr = get_all_data(curr_test, curr, batch_size)
-                    acc, loss, argmax = sess.run([layers['accuracy'],
-                                                  layers['loss'],
-                                                  layers['argmax']], feed_dict={
-                        layers['inputs']: inputs,
-                        layers['labels']: labels,
-                        layers['is_training']: False
-                    })[:3]
+        for step in xrange(trainSteps):
+            x, y = trainDataGenerator.next()
+            loss, acc = sess.run(fetches, feed_dict={
+                layers['inputs']: x,
+                layers['labels']: y,
+                layers['is_training']: True,
+                layers['keep_prob']: 0.5
+            })[:2]
 
-                    avg_acc += acc
-                    avg_loss += loss
+            trainLosses.append(loss)
+            trainAccuracy.append(acc)
 
-                avg_acc /= n_steps
-                avg_loss /= n_steps
-                print 'e: ', e
-                print 'test accuracy: ', avg_acc
-                print 'test loss: ', avg_loss
-                saver.save(sess, 'trained/deepid2-{}'.format(e))
+            if step % valInterval == 0:
+                x, y = valDataGenerator.next()
+                loss, acc = sess.run(layerFetches, feed_dict={
+                    layers['inputs']: x,
+                    layers['labels']: y,
+                    layers['is_training']: False,
+                    layers['keep_prob']: 1.0
+                })
 
-        print 'done'
+                valLosses.append(loss)
+                valAccuracy.append(acc)
 
+            if step % updateInterval == 0:
+                graph.refresh(fig1, ax1, trainLosses[::updateInterval], 'b-')
+                graph.refresh(fig1, ax1, trainAccuracy[::updateInterval], 'r-')
+                graph.refresh(fig2, ax2, valLosses[::updateInterval], 'b-')
+                graph.refresh(fig2, ax2, valAccuracy[::updateInterval], 'r-')
 
-def pipeline():
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
-    with tf.Session(config=config) as sess:
-        layers, train_ops = deep_id.get_model(0.0005, len(data.PEOPLE_TRAIN))
-        sess.run(tf.global_variables_initializer())
-        saver = tf.train.Saver()
-        fetches = [layers['verif_accuracy'],
-                   layers['ident_loss'],
-                   layers['verif_loss']] + train_ops.values()
-        curr = 0
-        batch_size = 32
-        n_epoch = 100
-        for e in xrange(1, n_epoch + 1):
-            n_steps = int(len(data.PAIRS_TRAIN) / batch_size)
-            avg_acc = 0
-            avg_loss_1 = 0
-            avg_loss_2 = 0
-            for step in xrange(n_steps):
-                l_inputs, \
-                r_inputs, \
-                l_labels, \
-                r_labels, \
-                verif_labels, \
-                curr = get_data(data.PAIRS_TRAIN, curr, batch_size)
-                acc, loss_1, loss_2 = sess.run(fetches, feed_dict={
-                    layers['l_input']: l_inputs,
-                    layers['r_input']: r_inputs,
-                    layers['l_labels']: l_labels,
-                    layers['r_labels']: r_labels,
-                    layers['verif_labels']: verif_labels,
-                })[:3]
+                print '---', step, '---'
+                print 'last train', trainLosses[-1], trainAccuracy[-1]
+                print 'last validation', valLosses[-1], valAccuracy[-1]
 
-                avg_acc += acc
-                avg_loss_1 += loss_1
-                avg_loss_2 += loss_2
+            if step % saveInterval == 0:
+                save(saveDir,
+                     subjectName,
+                     saver,
+                     sess,
+                     globalStep,
+                     trainLosses,
+                     trainAccuracy,
+                     valLosses,
+                     valAccuracy)
 
-            avg_acc /= n_steps
-            avg_loss_1 /= n_steps
-            avg_loss_2 /= n_steps
-            print 'average train verification accuracy: ', avg_acc
-            print 'ident: ', avg_loss_1
-            print 'verif: ', avg_loss_2
+        testLosses = []
+        testAccuracy = []
 
-            # if e % 5 == 0:
-            #     curr = 0
-            #     n_steps = int(len(data.PEOPLE_TEST) / batch_size)
-            #     avg_acc = 0
-            #     for step in xrange(n_steps):
-            #         l_inputs, \
-            #         r_inputs, \
-            #         l_labels, \
-            #         r_labels, \
-            #         verif_labels, \
-            #         curr = get_data(data.PAIRS_TRAIN, curr, batch_size)
-            #         acc = sess.run(fetches, feed_dict={
-            #             layers['l_input']: l_inputs,
-            #             layers['r_input']: r_inputs,
-            #             layers['l_labels']: l_labels,
-            #             layers['r_labels']: r_labels,
-            #             layers['verif_labels']: verif_labels,
-            #         })[0]
-            #
-            #         avg_acc += acc
-            #         print 'test verification accuracy: ', acc
-            #
-            #     avg_acc /= n_steps
-            #     print 'average test verification accuracy: ', avg_acc
-            #     saver.save(sess, 'trained/deepid2-{}'.format(e))
+        for _ in xrange(testSteps):
+            x, y = testDataGenerator.next()
+            loss, acc = sess.run(layerFetches, feed_dict={
+                layers['inputs']: x,
+                layers['labels']: y,
+                layers['is_training']: False,
+                layers['keep_prob']: 1.0
+            })
 
-        print 'done'
+            testLosses.append(loss)
+            testAccuracy.append(acc)
+
+        print 'average testing', np.mean(testLosses), np.mean(testAccuracy)
+
+        save(saveDir,
+             subjectName,
+             saver,
+             sess,
+             globalStep,
+             trainLosses,
+             trainAccuracy,
+             valLosses,
+             valAccuracy)
+
+        graph.closeFig(fig1)
+        graph.closeFig(fig2)
 
 
-def random_crop(in_data, size):
-    h, w = in_data.shape[:2]
+def save(saveDir, subjectName, saver, sess, globalStep, trainLosses, trainAccuracy, valLosses, valAccuracy):
+    savePath = saveDir + '/{}'.format(subjectName)
+    print 'saved to', saver.save(sess, savePath, global_step=globalStep)
 
-    rand_x = np.random.randint(0, w - size[1])
-    rand_y = np.random.randint(0, h - size[0])
-
-    return in_data[rand_y:rand_y + size[0], rand_x:rand_x + size[1]]
-
-
-def random_scale(in_data, lower, upper, size):
-    fx = np.random.uniform(lower, upper)
-    fy = np.random.uniform(lower, upper)
-    out_data = cv2.resize(in_data, None, fx=fx, fy=fy)
-    return cv2.resize(out_data, size)
+    np.savez(savePath + '-graph-{}'.format(sess.run(globalStep)),
+             trainLosses=trainLosses,
+             trainAccuracy=trainAccuracy,
+             valLosses=valLosses,
+             valAccuracy=valAccuracy)
 
 
-def get_all_data(DATA, curr, batch_size):
-    n_total = len(DATA)
+def load(loadDir, loadName, loadStep, saver, sess, globalStep):
+    loadPath = loadDir + '/{}'.format(loadName)
+    saver.restore(sess, loadPath + '-' + str(loadStep))
+    print 'loaded ', loadPath + '-' + str(loadStep)
 
-    if curr + batch_size >= n_total or curr == 0:
-        shuffle_ind = np.arange(n_total)
-        np.random.seed(np.random.randint(100000))
-        np.random.shuffle(shuffle_ind)
+    data = np.load(loadPath + '-graph-{}.npz'.format(sess.run(globalStep)))
 
-        curr = 0
-        DATA[:] = DATA[shuffle_ind]
+    trainLosses = data['trainLosses'].tolist()
+    trainAccuracy = data['trainAccuracy'].tolist()
+    valLosses = data['valLosses'].tolist()
+    valAccuracy = data['valAccuracy'].tolist()
 
-    inputs = []
-    labels = []
-    datum = DATA[curr:curr + batch_size]
-
-    for i in xrange(batch_size):
-        d = datum[i]
-        filename = d['filename']
-        label = d['label']
-        img = cv2.imread(filename)
-        img = random_scale(img, 1, 1, (72, 85))
-        img = random_crop(img, (55, 47))
-        # img = (img - img.mean()) / img.std()
-        inputs.append(img)
-        labels.append(label)
-
-    labels = np.vstack(labels)
-
-    return inputs, labels, curr + batch_size
-
-
-def get_data(DATA, curr, batch_size):
-    n_total = len(data.PAIRS_TRAIN)
-
-    if curr + batch_size >= n_total or curr == 0:
-        shuffle_ind = np.arange(n_total)
-        np.random.seed(np.random.randint(100000))
-        np.random.shuffle(shuffle_ind)
-
-        curr = 0
-        DATA[:] = DATA[shuffle_ind]
-
-    l_inputs = []
-    r_inputs = []
-    l_labels = []
-    r_labels = []
-    verif_labels = []
-    pairs = DATA[curr:curr + batch_size]
-
-    for i in xrange(batch_size):
-        pair = pairs[i]
-        l_filename = pair['l_filename']
-        r_filename = pair['r_filename']
-        l_label = pair['l_label']
-        r_label = pair['r_label']
-        verif_label = pair['verif_label']
-
-        # preprocessing
-        l_img = cv2.imread(l_filename)
-        l_img = random_scale(l_img, 0.9, 1.1, (150, 150))
-        l_img = random_crop(l_img, (55, 47))
-        # l_img = cv2.resize(l_img, (47,55))
-        l_img = (l_img - l_img.mean()) / l_img.std()
-        l_inputs.append(l_img)
-
-        r_img = cv2.imread(r_filename)
-        r_img = random_scale(r_img, 0.9, 1.1, (150, 150))
-        r_img = random_crop(r_img, (55, 47))
-        # r_img = cv2.resize(r_img, (47, 55))
-        r_img = (r_img - r_img.mean()) / r_img.std()
-        r_inputs.append(r_img)
-
-        l_labels.append(l_label)
-        r_labels.append(r_label)
-
-        verif_labels.append(verif_label)
-
-    l_labels = np.vstack(l_labels)
-    r_labels = np.vstack(r_labels)
-    verif_labels = np.vstack(verif_labels)
-
-    return l_inputs, r_inputs, l_labels, r_labels, verif_labels, curr + batch_size
+    return trainLosses, trainAccuracy, valLosses, valAccuracy
 
 
 if __name__ == '__main__':
