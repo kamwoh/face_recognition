@@ -27,9 +27,9 @@ Monitor the training graph, if it stays at a loss/accuracy for a long time, init
 4. Hope my code is easy to read
 
 ## Performance
-Training on LFW - maximum of 80% (only 68 classes, I choose minimum of 10 faces)
+Training on LFW - maximum of 80% accuracy (only 68 classes, I choose minimum of 10 faces)
 
-Training on Facescrub - still training, but reached 75% by the time I commit (530 classes)
+Training on Facescrub - still training, but reached 75% accuracy by the time I commit (530 classes)
 
 ## Contact
 
