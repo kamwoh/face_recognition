@@ -17,7 +17,7 @@ def pipeline_deepid():
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
 
-    lr = 0.01
+    lr = 0.005
     batchSize = 128
     trainEpoch = 30
 
@@ -96,12 +96,12 @@ def pipeline_deepid():
         # valAccuracy = []
         trainLosses, trainAccuracy, valLosses, valAccuracy = load('{}/trained/{}'.format(dirname, subjectName),
                                                                   subjectName,
-                                                                  42280,
+                                                                  51340,
                                                                   saver,
                                                                   sess,
                                                                   globalStep)
 
-        # print 'current learning rate', sess.run(learningRate)
+        print 'current learning rate', sess.run(learningRate)
 
         for step in xrange(trainSteps):
             x, y = trainDataGenerator.next()
