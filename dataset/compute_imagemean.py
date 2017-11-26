@@ -25,6 +25,9 @@ def computeImageMean(datadir, grayscale=False):
                 else:
                     image = cv2.imread(filepath)
 
+                if image.shape[:2] != [55, 47]:
+                    image = cv2.resize(image, (47, 55), interpolation=cv2.INTER_AREA)
+
                 imageShape = image.shape
                 imageMean = np.mean(image, axis=(0, 1)).reshape((1, 1, channel))
 
@@ -55,6 +58,9 @@ def computeImageStd(datadir, mean, nImages, imageShape, grayscale=False):
                     image = cv2.imread(filepath, 0)
                 else:
                     image = cv2.imread(filepath)
+
+                if image.shape[:2] != [55, 47]:
+                    image = cv2.resize(image, (47, 55), interpolation=cv2.INTER_AREA)
 
                 image_mean = image - mean  # image minus mean
                 image_mean = np.square(image_mean)

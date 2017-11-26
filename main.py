@@ -11,15 +11,18 @@ import time
 
 
 def pipeline_deepid():
-    # subjectName = 'face-recog-{}'.format(time.time())
-    subjectName = 'face-recog-{}'.format('1510879123.02')
+    subjectName = 'face-recog-{}'.format(time.time())
+    # subjectName = 'face-recog-{}'.format('1511344323.48')
     dirname = os.path.dirname(__file__)
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
 
-    lr = 0.005
-    batchSize = 128
-    trainEpoch = 30
+    lr = 0.01
+    # lr = 0.001
+    # lr = 0.0001
+    # lr = 0.00001
+    batchSize = 500
+    trainEpoch = 100
 
     trainLFW = False
 
@@ -68,21 +71,27 @@ def pipeline_deepid():
         print 'classes -', nClasses
 
         trainSteps = trainEpoch * int(nTrainImages / batchSize)
-        testSteps = nTestImages / batchSize
+        testSteps = int(nTestImages / batchSize)
+        valSteps = int(nValImages / batchSize)
 
     fig1, ax1 = graph.getFigAx()
     fig2, ax2 = graph.getFigAx()
 
     with tf.Session(config=config) as sess:
         globalStep = tf.Variable(0, trainable=False)
-        learningRate = tf.train.exponential_decay(lr, globalStep, 100000, 0.9)
+        # learningRate = tf.train.exponential_decay(lr, globalStep, 100000, 0.5)
+        learningRate = tf.constant(lr)
 
         valInterval = 1
         saveInterval = 500
-        updateInterval = 100
+        updateInterval = 500
         saveDir = '{}/trained/{}'.format(dirname, subjectName)
 
         layers, train_ops = deep_id.get_model(learningRate, nClasses, globalStep)
+
+        # for node in tf.get_default_graph().as_graph_def().node:
+        #     print node.name
+
         sess.run(tf.global_variables_initializer())
         saver = tf.train.Saver(max_to_keep=None)
 
@@ -90,20 +99,20 @@ def pipeline_deepid():
                         layers['accuracy']]
         fetches = layerFetches + train_ops.values()
 
-        # trainLosses = []
-        # trainAccuracy = []
-        # valLosses = []
-        # valAccuracy = []
-        trainLosses, trainAccuracy, valLosses, valAccuracy = load('{}/trained/{}'.format(dirname, subjectName),
-                                                                  subjectName,
-                                                                  51340,
-                                                                  saver,
-                                                                  sess,
-                                                                  globalStep)
+        trainLosses = []
+        trainAccuracy = []
+        valLosses = []
+        valAccuracy = []
+        # trainLosses, trainAccuracy, valLosses, valAccuracy = load('{}/trained/{}'.format(dirname, subjectName),
+        #                                                           subjectName,
+        #                                                           49280,
+        #                                                           saver,
+        #                                                           sess,
+        #                                                           globalStep)
 
         print 'current learning rate', sess.run(learningRate)
 
-        for step in xrange(trainSteps):
+        for step in xrange(0):
             x, y = trainDataGenerator.next()
             loss, acc = sess.run(fetches, feed_dict={
                 layers['inputs']: x,
@@ -151,8 +160,11 @@ def pipeline_deepid():
         testLosses = []
         testAccuracy = []
 
-        for _ in xrange(testSteps):
+        testDataRes = []
+
+        for tsteps in xrange(testSteps):
             x, y = testDataGenerator.next()
+
             loss, acc = sess.run(layerFetches, feed_dict={
                 layers['inputs']: x,
                 layers['labels']: y,
@@ -160,24 +172,50 @@ def pipeline_deepid():
                 layers['keep_prob']: 1.0
             })
 
+            pred, softmax = sess.run([layers['ident_pred'], layers['ident_softmax']], feed_dict={
+                layers['inputs']: x,
+                layers['is_training']: False,
+                layers['keep_prob']: 1.0
+            })
+
+            testDataRes.append((x, y, pred, softmax))
+
             testLosses.append(loss)
             testAccuracy.append(acc)
 
         print 'average testing', np.mean(testLosses), np.mean(testAccuracy)
 
-        save(saveDir,
-             subjectName,
-             saver,
-             sess,
-             globalStep,
-             trainLosses,
-             trainAccuracy,
-             valLosses,
-             valAccuracy)
+        # if not trainLFW:
+        #     meanstdDir = '{}/dataset/facescrub_meanstd'.format(dirname)
+        #     mean = np.load(meanstdDir + '/mean.npy')
+        #     std = np.load(meanstdDir + '/std.npy')
+        #
+        #     saveErrorImages(testDataRes, mean, std)
+
+        # save(saveDir,
+        #      subjectName,
+        #      saver,
+        #      sess,
+        #      globalStep,
+        #      trainLosses,
+        #      trainAccuracy,
+        #      valLosses,
+        #      valAccuracy)
+
+        saveWeights(sess, '{}/trained_weight/{}'.format(dirname, subjectName))
 
         graph.closeFig(fig1)
         graph.closeFig(fig2)
 
+def saveWeights(sess, weightsDir):
+    weights = {}
+
+    for v in tf.global_variables():
+        print v.name
+        weights[v.name] = sess.run(v)
+
+    np.savez(weightsDir, **weights)
+    print 'saved to', weightsDir + '.npz'
 
 def save(saveDir, subjectName, saver, sess, globalStep, trainLosses, trainAccuracy, valLosses, valAccuracy):
     savePath = saveDir + '/{}'.format(subjectName)
@@ -203,6 +241,32 @@ def load(loadDir, loadName, loadStep, saver, sess, globalStep):
     valAccuracy = data['valAccuracy'].tolist()
 
     return trainLosses, trainAccuracy, valLosses, valAccuracy
+
+
+def saveErrorImages(testDataRes, mean, std):
+    import cv2
+    dirname = os.path.dirname(__file__)
+    i = 0
+    for x, y, pred, softmax in testDataRes:
+        x *= (std + 1e-7)
+        x += mean
+        x = x.astype(np.uint8)
+
+        for j in xrange(x.shape[0]):
+            image = cv2.cvtColor(x[j], cv2.COLOR_RGB2BGR)
+            label = np.squeeze(y[j])
+            p = np.squeeze(pred[j])
+            s = np.squeeze(np.max(softmax[j]))
+            path = '{}/result/{}/{}_{}_{}.png'.format(dirname, label, p, s, i)
+            if np.equal(label, p):
+                continue
+
+            if not os.path.exists(os.path.dirname(path)):
+                os.makedirs(os.path.dirname(path))
+            # print image
+            cv2.imwrite(path, image)
+
+            i += 1
 
 
 if __name__ == '__main__':

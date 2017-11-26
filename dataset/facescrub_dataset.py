@@ -13,10 +13,6 @@ valDatasetPath = '{}/facescrub_val'.format(dirname)
 def getDataGenerator(datadir, meanstddir, batchSize, shuffle):
     dataGenerator = ImageDataGenerator(featurewise_center=True,
                                        featurewise_std_normalization=True,
-                                       width_shift_range=0.1,
-                                       height_shift_range=0.1,
-                                       zoom_range=0.1,
-                                       rotation_range=10,
                                        horizontal_flip=True)
 
     mean = np.load(meanstddir + '/mean.npy')
