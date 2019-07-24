@@ -44,28 +44,28 @@ def separateToTrainValTest(datadir, trainRatio, valRatio, testRatio):
                 if not os.path.exists(os.path.join(datadir + '_train', dir)):
                     os.makedirs(os.path.join(datadir + '_train', dir))
 
-                for _ in xrange(valLength):
+                for _ in range(valLength):
                     filepath = os.path.join(root, dir, filenames[j])
                     newfilepath = os.path.join(datadir + '_val', dir, filenames[j])
                     if not os.path.exists(newfilepath):
                         shutil.copy(filepath, newfilepath)
                     j += 1
 
-                for _ in xrange(testLength):
+                for _ in range(testLength):
                     filepath = os.path.join(root, dir, filenames[j])
                     newfilepath = os.path.join(datadir + '_test', dir, filenames[j])
                     if not os.path.exists(newfilepath):
                         shutil.copy(filepath, newfilepath)
                     j += 1
 
-                for _ in xrange(trainLength):
+                for _ in range(trainLength):
                     filepath = os.path.join(root, dir, filenames[j])
                     newfilepath = os.path.join(datadir + '_train', dir, filenames[j])
                     if not os.path.exists(newfilepath):
                         shutil.copy(filepath, newfilepath)
                     j += 1
 
-    print 'done'
+    print('done')
 
 def main():
     dirname = os.path.dirname(__file__)

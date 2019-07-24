@@ -56,7 +56,7 @@ def cropFaceByBoundingBoxFromDir(datadir, bboxes, croppedSize, saveDir):
                     os.makedirs(os.path.dirname(savepath))
 
                 cv2.imwrite(savepath, resizedImage)
-    print 'done!'
+    print('done!')
 
 
 def main():

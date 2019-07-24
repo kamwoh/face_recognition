@@ -10,7 +10,7 @@ def computeImageMean(datadir, grayscale=False):
     nImages = 0
     imageShape = None
 
-    print 'computing image mean'
+    print('computing image mean')
 
     for root, dirs, files in os.walk(datadir):
         if files != []:
@@ -44,7 +44,7 @@ def computeImageStd(datadir, mean, nImages, imageShape, grayscale=False):
     sumsquare = np.zeros((imageShape[0], imageShape[1], channel), dtype=np.float64)
     rcount = nImages * imageShape[0] * imageShape[1]
 
-    print 'computing image std'
+    print('computing image std')
 
     for root, dirs, files in os.walk(datadir):
         if files != []:
@@ -73,6 +73,7 @@ def computeImageStd(datadir, mean, nImages, imageShape, grayscale=False):
     print
     return std
 
+
 def main():
     dirname = os.path.dirname(__file__)
     imageMeanPath = '{}/facescrub_meanstd/mean'.format(dirname)
@@ -91,6 +92,7 @@ def main():
 
     np.save(imageMeanPath, mean)
     np.save(imageStdPath, std)
+
 
 if __name__ == '__main__':
     main()

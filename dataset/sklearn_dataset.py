@@ -18,13 +18,13 @@ lfwData = {
 
 lfwDataGenerator = {
     'augmentedDataGenerator': ImageDataGenerator(featurewise_center=True,
-                                               featurewise_std_normalization=True,
-                                               data_format='channels_last',
-                                               horizontal_flip=True,
-                                               width_shift_range=0.1,
-                                               height_shift_range=0.1,
-                                               rotation_range=20,
-                                               zoom_range=0.2),
+                                                 featurewise_std_normalization=True,
+                                                 data_format='channels_last',
+                                                 horizontal_flip=True,
+                                                 width_shift_range=0.1,
+                                                 height_shift_range=0.1,
+                                                 rotation_range=20,
+                                                 zoom_range=0.2),
     'defaultDataGenerator': ImageDataGenerator(featurewise_center=True,
                                                featurewise_std_normalization=True,
                                                data_format='channels_last',
@@ -112,7 +112,7 @@ def getDataGenerator(dataGeneratorKey, X, Y, batchSize, shuffle, scaledSize=None
 
         newX = np.zeros((X.shape[0], scaledSize[0], scaledSize[1], X.shape[3]), dtype=X.dtype)
 
-        for i in xrange(X.shape[0]):
+        for i in range(X.shape[0]):
             newX[i] = resize(X[i])
 
         X = newX
@@ -121,7 +121,7 @@ def getDataGenerator(dataGeneratorKey, X, Y, batchSize, shuffle, scaledSize=None
         dataGenerator.fit(X)
         np.savez('{}/lfw/image_mean_and_std'.format(dirname),
                  mean=dataGenerator.mean,
-                 std=dataGenerator.std) # for testing stage
+                 std=dataGenerator.std)  # for testing stage
     else:
         if trainKey:
             trainDataGenerator = lfwDataGenerator[trainKey]
@@ -136,4 +136,3 @@ def getDataGenerator(dataGeneratorKey, X, Y, batchSize, shuffle, scaledSize=None
                                    shuffle,
                                    seed=np.random.randint(100000))
     return generator
-

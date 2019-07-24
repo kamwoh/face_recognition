@@ -65,10 +65,10 @@ def pipeline_deepid():
         valDataGenerator, nValImages = fs.getDataGenerator(valDataDir, meanstdDir, batchSize, True)
         testDataGenerator, nTestImages = fs.getDataGenerator(testDataDir, meanstdDir, batchSize, True)
 
-        print 'train -', nTrainImages
-        print 'val -', nValImages
-        print 'test -', nTestImages
-        print 'classes -', nClasses
+        print('train -', nTrainImages)
+        print('val -', nValImages)
+        print('test -', nTestImages)
+        print('classes -', nClasses)
 
         trainSteps = trainEpoch * int(nTrainImages / batchSize)
         testSteps = int(nTestImages / batchSize)
@@ -110,9 +110,9 @@ def pipeline_deepid():
         #                                                           sess,
         #                                                           globalStep)
 
-        print 'current learning rate', sess.run(learningRate)
+        print('current learning rate', sess.run(learningRate))
 
-        for step in xrange(0):
+        for step in range(trainSteps):
             x, y = trainDataGenerator.next()
             loss, acc = sess.run(fetches, feed_dict={
                 layers['inputs']: x,
@@ -142,9 +142,9 @@ def pipeline_deepid():
                 graph.refresh(fig2, ax2, valLosses[::updateInterval], 'b-')
                 graph.refresh(fig2, ax2, valAccuracy[::updateInterval], 'r-')
 
-                print '---', step, '---'
-                print 'last train', trainLosses[-1], trainAccuracy[-1]
-                print 'last validation', valLosses[-1], valAccuracy[-1]
+                print('---', step, '---')
+                print('last train', trainLosses[-1], trainAccuracy[-1])
+                print('last validation', valLosses[-1], valAccuracy[-1])
 
             if step % saveInterval == 0:
                 save(saveDir,
@@ -162,7 +162,7 @@ def pipeline_deepid():
 
         testDataRes = []
 
-        for tsteps in xrange(testSteps):
+        for tsteps in range(testSteps):
             x, y = testDataGenerator.next()
 
             loss, acc = sess.run(layerFetches, feed_dict={
@@ -183,7 +183,7 @@ def pipeline_deepid():
             testLosses.append(loss)
             testAccuracy.append(acc)
 
-        print 'average testing', np.mean(testLosses), np.mean(testAccuracy)
+        print('average testing', np.mean(testLosses), np.mean(testAccuracy))
 
         # if not trainLFW:
         #     meanstdDir = '{}/dataset/facescrub_meanstd'.format(dirname)
@@ -207,19 +207,21 @@ def pipeline_deepid():
         graph.closeFig(fig1)
         graph.closeFig(fig2)
 
+
 def saveWeights(sess, weightsDir):
     weights = {}
 
     for v in tf.global_variables():
-        print v.name
+        print(v.name)
         weights[v.name] = sess.run(v)
 
     np.savez(weightsDir, **weights)
-    print 'saved to', weightsDir + '.npz'
+    print('saved to', weightsDir + '.npz')
+
 
 def save(saveDir, subjectName, saver, sess, globalStep, trainLosses, trainAccuracy, valLosses, valAccuracy):
     savePath = saveDir + '/{}'.format(subjectName)
-    print 'saved to', saver.save(sess, savePath, global_step=globalStep)
+    print('saved to', saver.save(sess, savePath, global_step=globalStep))
 
     np.savez(savePath + '-graph-{}'.format(sess.run(globalStep)),
              trainLosses=trainLosses,
@@ -231,7 +233,7 @@ def save(saveDir, subjectName, saver, sess, globalStep, trainLosses, trainAccura
 def load(loadDir, loadName, loadStep, saver, sess, globalStep):
     loadPath = loadDir + '/{}'.format(loadName)
     saver.restore(sess, loadPath + '-' + str(loadStep))
-    print 'loaded ', loadPath + '-' + str(loadStep)
+    print('loaded ', loadPath + '-' + str(loadStep))
 
     data = np.load(loadPath + '-graph-{}.npz'.format(sess.run(globalStep)))
 
@@ -252,7 +254,7 @@ def saveErrorImages(testDataRes, mean, std):
         x += mean
         x = x.astype(np.uint8)
 
-        for j in xrange(x.shape[0]):
+        for j in range(x.shape[0]):
             image = cv2.cvtColor(x[j], cv2.COLOR_RGB2BGR)
             label = np.squeeze(y[j])
             p = np.squeeze(pred[j])
