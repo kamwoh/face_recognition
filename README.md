@@ -24,16 +24,12 @@ Monitor the training graph, if it stays at a loss/accuracy for a long time, init
 
 3. My code is in continue training state, if you want a new training, comment the "load" code
 
-4. Hope my code is easy to read
-
 ## Performance
 Training on LFW - maximum of 80% accuracy (only 68 classes, I choose minimum of 10 faces)
 
 Training on Facescrub - still training, but reached 75% accuracy by the time I commit (530 classes)
 
 ## Contact
-
-Please correct me and give me any comment whether it is good or bad. I wanna improve myself not only in AI and also coding
 
 Email: kamwoh@gmail.com
 
